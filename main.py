@@ -62,18 +62,15 @@ async def create_order(request: Request):
 
     # Шаг 1: Получаем id_route если его нет
     if "id_route" not in data or not data["id_route"]:
-        # Используем points_order для построения маршрута
-        points = data.get("points_order", [])
-        if not points:
-            # Fallback: если нет points_order, пробуем построить из points_route
-            points_route = data.get("points_route", [])
-            if points_route:
-                points = [{"coords": p} for p in points_route]
+        points = data.get("points", [])
         
         if not points:
             raise HTTPException(status_code=400, detail="Missing points for route")
         
-        route_payload = {"id_taxi": ID_TAXI, "points": points}
+        # Для /route нужны только координаты
+        points_coords = [p["coords"] for p in points if "coords" in p]
+        
+        route_payload = {"id_taxi": ID_TAXI, "points": points_coords}
         r = requests.post(f"{TMOTOR_API}/route", json=route_payload, timeout=20)
         route_result = r.json()
         
