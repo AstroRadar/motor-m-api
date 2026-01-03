@@ -37,6 +37,7 @@ def health():
 
 @app.post("/route")
 async def build_route(data: dict):
+    # Принимаем полные точки (coords + адресные поля) и пробрасываем как есть
     payload = {"id_taxi": ID_TAXI, "points": data["points"]}
     r = requests.post(f"{TMOTOR_API}/route", json=payload, timeout=20)
     return r.json()
@@ -67,10 +68,8 @@ async def create_order(request: Request):
         if not points:
             raise HTTPException(status_code=400, detail="Missing points for route")
         
-        # Для /route нужны только координаты
-        points_coords = [p["coords"] for p in points if "coords" in p]
-        
-        route_payload = {"id_taxi": ID_TAXI, "points": points_coords}
+        # Пробрасываем точки целиком (coords + city/street/home)
+        route_payload = {"id_taxi": ID_TAXI, "points": points}
         r = requests.post(f"{TMOTOR_API}/route", json=route_payload, timeout=20)
         route_result = r.json()
         
