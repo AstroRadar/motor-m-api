@@ -51,33 +51,15 @@ async def calculate(data: dict):
 async def create_order(request: Request):
     data = await request.json()
 
-    verify_recaptcha(data["recaptcha"])
+    # Проверка reCAPTCHA
+    recaptcha_token = data.pop("recaptcha", None)
+    if recaptcha_token:
+        verify_recaptcha(recaptcha_token)
 
-    # Шаг 1: Построить маршрут
-    route_payload = {"id_taxi": ID_TAXI, "points": data["points"]}
-    r = requests.post(f"{TMOTOR_API}/route", json=route_payload, timeout=20)
-    route_result = r.json()
-    
-    if not route_result.get("status"):
-        raise HTTPException(status_code=400, detail={"error": "route_failed", "data": route_result})
-    
-    route_id = route_result.get("id", 0)
-    
-    # Шаг 2: Рассчитать стоимость
-    calc_payload = {"id_taxi": ID_TAXI, "id": route_id, "points": data["points"]}
-    r = requests.post(f"{TMOTOR_API}/order/calculate", json=calc_payload, timeout=20)
-    calc_result = r.json()
-    
-    # Шаг 3: Создать заказ
-    order_payload = {
-        "id_taxi": ID_TAXI,
-        "id_route": route_id,
-        "phone": data["phone"],
-        "comment": data.get("comment", ""),
-        "tariff": data["tariff"],
-        "pay_type": data.get("pay_type", 0),
-        "advanced": None,
-    }
+    # Добавляем id_taxi если его нет
+    if "id_taxi" not in data:
+        data["id_taxi"] = ID_TAXI
 
-    r = requests.post(f"{TMOTOR_API}/order", json=order_payload, timeout=20)
+    # Отправляем напрямую в tmotorm API
+    r = requests.post(f"{TMOTOR_API}/order", json=data, timeout=20)
     return r.json()
