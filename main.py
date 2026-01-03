@@ -60,6 +60,17 @@ async def create_order(request: Request):
     if "id_taxi" not in data:
         data["id_taxi"] = ID_TAXI
 
-    # Отправляем напрямую в tmotorm API
+    # Шаг 1: Получаем id_route если его нет
+    if "id_route" not in data or not data["id_route"]:
+        route_payload = {"id_taxi": ID_TAXI, "points": data.get("points_route", [])}
+        r = requests.post(f"{TMOTOR_API}/route", json=route_payload, timeout=20)
+        route_result = r.json()
+        
+        if not route_result.get("status"):
+            return route_result  # Возвращаем ошибку как есть
+        
+        data["id_route"] = route_result.get("id", 0)
+
+    # Шаг 2: Создаем заказ
     r = requests.post(f"{TMOTOR_API}/order", json=data, timeout=20)
     return r.json()
