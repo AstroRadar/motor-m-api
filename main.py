@@ -56,6 +56,8 @@ async def create_order(request: Request):
     recaptcha_token = data.pop("recaptcha", None)
     if recaptcha_token:
         verify_recaptcha(recaptcha_token)
+        # Bee API требует поле g-recaptcha-response
+        data["g-recaptcha-response"] = recaptcha_token
 
     # Добавляем id_taxi если его нет
     if "id_taxi" not in data:
