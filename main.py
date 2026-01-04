@@ -20,16 +20,23 @@ app.add_middleware(
 
 def verify_recaptcha(token: str):
     if not RECAPTCHA_SECRET:
-        raise HTTPException(status_code=500, detail="RECAPTCHA_SECRET is not set")
-
+        print("⚠️ RECAPTCHA_SECRET not set, skipping verification")
+        return True
+    
     r = requests.post(
         "https://www.google.com/recaptcha/api/siteverify",
         data={"secret": RECAPTCHA_SECRET, "response": token},
         timeout=10,
     )
     result = r.json()
+    print(f"🔐 Google reCAPTCHA verify result: {result}")
+    
     if not result.get("success"):
+        print(f"❌ Google reCAPTCHA validation failed: {result}")
         raise HTTPException(status_code=403, detail={"recaptcha": "failed", "google": result})
+    
+    print("✅ Google reCAPTCHA validation passed")
+    return True
 
 @app.get("/health")
 def health():
@@ -37,7 +44,6 @@ def health():
 
 @app.post("/route")
 async def build_route(data: dict):
-    # Принимаем полные точки (coords + адресные поля) и пробрасываем как есть
     payload = {"id_taxi": ID_TAXI, "points": data["points"]}
     r = requests.post(f"{TMOTOR_API}/route", json=payload, timeout=20)
     return r.json()
@@ -51,11 +57,17 @@ async def calculate(data: dict):
 @app.post("/order")
 async def create_order(request: Request):
     data = await request.json()
+    
+    print(f"📥 Received order request, keys: {list(data.keys())}")
 
     # Проверка reCAPTCHA: токен приходит в g-recaptcha-response
     recaptcha_token = data.get("g-recaptcha-response") or data.get("recaptcha")
-    if recaptcha_token:
+    
+    if recaptcha_token and RECAPTCHA_SECRET:
+        print(f"🔐 Verifying reCAPTCHA token (length: {len(recaptcha_token)})")
         verify_recaptcha(recaptcha_token)
+    else:
+        print(f"⏭️ Skipping reCAPTCHA verification (token: {bool(recaptcha_token)}, secret: {bool(RECAPTCHA_SECRET)})")
 
     # Добавляем id_taxi если его нет
     if "id_taxi" not in data:
@@ -68,16 +80,19 @@ async def create_order(request: Request):
         if not points:
             raise HTTPException(status_code=400, detail="Missing points for route")
         
-        # Пробрасываем точки целиком (coords + city/street/home)
         route_payload = {"id_taxi": ID_TAXI, "points": points}
         r = requests.post(f"{TMOTOR_API}/route", json=route_payload, timeout=20)
         route_result = r.json()
         
         if not route_result.get("status"):
-            return route_result  # Возвращаем ошибку как есть
+            return route_result
         
         data["id_route"] = route_result.get("id", 0)
+        print(f"📍 Got id_route from /route: {data['id_route']}")
 
     # Шаг 2: Создаем заказ
+    print(f"📤 Sending order to Bee API with keys: {list(data.keys())}")
     r = requests.post(f"{TMOTOR_API}/order", json=data, timeout=20)
-    return r.json()
+    bee_response = r.json()
+    print(f"📨 Bee API response: {bee_response}")
+    return bee_response
