@@ -52,12 +52,10 @@ async def calculate(data: dict):
 async def create_order(request: Request):
     data = await request.json()
 
-    # Проверка reCAPTCHA
-    recaptcha_token = data.get("recaptcha")
+    # Проверка reCAPTCHA: токен приходит в g-recaptcha-response
+    recaptcha_token = data.get("g-recaptcha-response") or data.get("recaptcha")
     if recaptcha_token:
         verify_recaptcha(recaptcha_token)
-        # Bee API требует поле g-recaptcha-response, оставляем и recaptcha
-        data["g-recaptcha-response"] = recaptcha_token
 
     # Добавляем id_taxi если его нет
     if "id_taxi" not in data:
