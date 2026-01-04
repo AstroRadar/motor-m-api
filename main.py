@@ -52,18 +52,24 @@ async def create_order(request: Request):
 
     # Нормализуем points для создания маршрута
     points_for_route = None
+    points_for_order = None
+    
     if "points_order" in data:
         # Извлекаем только координаты из points_order для /route
         points_for_route = [{"lat": p["coords"]["lat"], "lng": p["coords"]["lng"]} for p in data["points_order"]]
+        points_for_order = data["points_order"]  # Сохраняем полные данные
     elif "points_route" in data:
         points_for_route = data["points_route"]
+        points_for_order = data.get("points_order") or data["points_route"]
     elif "points" in data:
         points_data = data["points"]
         # Проверяем формат: если это полные данные (с coords), извлекаем координаты
         if isinstance(points_data[0], dict) and "coords" in points_data[0]:
             points_for_route = [{"lat": p["coords"]["lat"], "lng": p["coords"]["lng"]} for p in points_data]
+            points_for_order = points_data
         else:
             points_for_route = points_data
+            points_for_order = points_data
 
     # Шаг 1: Получаем id_route если его нет
     if "id_route" not in data or not data["id_route"]:
@@ -82,21 +88,11 @@ async def create_order(request: Request):
         data["id_route"] = route_result.get("id", 0)
         print(f"📍 Got id_route: {data['id_route']}")
 
-    # Определяем какой формат points использовать для Bee API
-    # Bee ожидает points_order (полные данные) в /order
-    if "points_order" in data:
-        # Уже в правильном формате, оставляем как есть
-        print("✅ Using points_order (full data)")
-    elif "points" in data:
-        # Если points с полными данными (coords + city + street + home)
-        points_data = data["points"]
-        if isinstance(points_data[0], dict) and "coords" in points_data[0]:
-            data["points_order"] = points_data
-            del data["points"]
-            print("🔄 Converted points → points_order")
-        else:
-            # Простые координаты - оставляем как points
-            print("⚠️ Using simple points format")
+    # Bee API ожидает поле 'points' (не points_order!)
+    # Используем полные данные (coords + city + street + home)
+    if points_for_order:
+        data["points"] = points_for_order
+        print(f"✅ Using 'points' field with full data ({len(points_for_order)} points)")
     
     # Чистим payload от полей, которые могут вызывать bee_500
     if "advanced" in data and data["advanced"] is None:
@@ -110,11 +106,11 @@ async def create_order(request: Request):
     # Убираем служебные поля
     data.pop("do_calculate", None)
     data.pop("points_route", None)
-    data.pop("points", None)  # Убираем points если есть points_order
+    data.pop("points_order", None)  # Удаляем points_order, используем points
 
     # Шаг 2: Создаем заказ
     print(f"📤 Sending to Bee, keys: {list(data.keys())}")
-    print(f"📦 Payload preview: id_taxi={data.get('id_taxi')}, id_route={data.get('id_route')}, phone={data.get('phone')}, points_order={len(data.get('points_order', []))} points")
+    print(f"📦 Payload preview: id_taxi={data.get('id_taxi')}, id_route={data.get('id_route')}, phone={data.get('phone')}, points={len(data.get('points', []))} points")
     
     r = requests.post(f"{TMOTOR_API}/order", json=data, timeout=20)
     bee_response = r.json()
